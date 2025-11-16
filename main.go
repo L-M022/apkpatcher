@@ -952,7 +952,43 @@ func checkPatchPreRequisites(appName, apk string, w fyne.Window) bool {
 	}
 	return true
 }
+func getLatestRVP(patchname string) (string, error) {
+	dir := "patches/" + patchname
 
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	var newest string
+	var newestTime int64 = 0
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+
+		if filepath.Ext(e.Name()) != ".rvp" {
+			continue
+		}
+
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+
+		if info.ModTime().Unix() > newestTime {
+			newestTime = info.ModTime().Unix()
+			newest = e.Name()
+		}
+	}
+
+	if newest == "" {
+		return "", fmt.Errorf("no .rvp files found in patches/ReVanced")
+	}
+
+	return filepath.Join(dir, newest), nil
+}
 func PatchApp(apk, cliSource, source, appName, patchesSource string, logData binding.String, w fyne.Window) error {
 
 	if !checkPatchPreRequisites(appName, apk, w) {
@@ -979,10 +1015,13 @@ func PatchApp(apk, cliSource, source, appName, patchesSource string, logData bin
 	}
 	patchesSourceSlice := strings.Split(patchesSource, "/")
 
+	latestRvp, _ := getLatestRVP(patchesSourceSlice[1])
+
 	cmdArgs := []string{
 		"-jar", cliSource, "patch",
 		apk,
-		"--patches", "patches/" + patchesSourceSlice[1] + "/patches-*.rvp",
+		// "--patches", "patches/" + patchesSourceSlice[1] + "/patches-*.rvp",
+		"--patches", latestRvp,
 		"--out", outputPath,
 		"-O", "patches/gorevancify-patch-options.json",
 		"--exclusive",
