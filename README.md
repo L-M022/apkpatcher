@@ -1,7 +1,7 @@
 # Apk Patcher
 
 **Apk Patcher** allows you to apply **Revanced** or **Inotia00** patches to any compatible APK.
-
+(Inspired by Revancify by decipher)
 ---
 
 ## Requirements
