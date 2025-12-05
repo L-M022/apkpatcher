@@ -32,5 +32,22 @@
                 "repo": "revanced-integrations"
             }
         }
+    },
+	"kitadai31": {
+        "projectName": "RVX6-7",
+        "sources": {
+            "cli": {
+                "org": "kitadai31",
+                "repo": "revanced-cli"
+            },
+            "patches": {
+                "org": "kitadai31",
+                "repo": "revanced-patches"
+            },
+            "integrations": {
+                "org": "kitadai31",
+                "repo": "revanced-integrations"
+            }
+        }
     }
 }

@@ -202,6 +202,7 @@ var patches []PatchInfo
 var patchOptionJson []PatchOptionsJSON
 
 var orgNames []string
+var projNames []string
 
 // Downloader
 var apkDownloadVersion string = ""
@@ -234,6 +235,24 @@ func getOrgNames(sources map[string]Source) []string {
 		orgNames = append(orgNames, source.Sources.Patches.Org)
 	}
 	return orgNames
+}
+func getProjNames(sources map[string]Source) []string {
+	var projNames []string
+
+	for _, source := range sources {
+		projNames = append(projNames, source.ProjectName)
+	}
+	return projNames
+}
+func getOrgNameByProjName(sources map[string]Source, search string) string {
+
+	for _, source := range sources {
+		if search == source.ProjectName {
+			return source.ProjectName
+		}
+
+	}
+	return "nil"
 }
 
 func writePatchesTXT() error {
@@ -617,7 +636,7 @@ func main() {
 	// Load projects from JSON file
 	sources := loadSourcesFromFile("patches/sources.json")
 	orgNames = getOrgNames(sources)
-
+	projNames = getProjNames(sources)
 	//LoadSettings
 	if readSettings() {
 		updatePatches()
@@ -677,7 +696,7 @@ func main() {
 
 	// Dropdown patches
 
-	dropdown := widget.NewSelect(orgNames, func(selected string) {
+	dropdown := widget.NewSelect(projNames, func(selected string) {
 
 		dropdownVer.ClearSelected()
 		dropdownVer.Options = []string{}
@@ -688,7 +707,8 @@ func main() {
 		patchName.Text = "Patch selected: " + selected
 
 		// Get patch data and available versions
-		prepareOptionsAndPatchesJson(selected)
+		chosen := getOrgNameByProjName(sources, selected)
+		prepareOptionsAndPatchesJson(chosen)
 
 		getAvailableAppsNamesByPkg()
 		dropdownApp.Options = supportedApp
