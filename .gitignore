@@ -1,7 +1,7 @@
 patches/patches-to-use.txt
 patches.json
 options.json
-logs/
+logs/*
 apps/patched
 patches/inotia00
 patches/kitadai31
@@ -9,3 +9,4 @@ patches/piko
 patches/ReVanced 
 settings.txt 
 patches/gorevancify-patch-options.json  
+patches/patches-to-use.txt
