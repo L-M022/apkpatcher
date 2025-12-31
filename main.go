@@ -236,6 +236,7 @@ func getOrgNames(sources map[string]Source) []string {
 	}
 	return orgNames
 }
+
 func getProjNames(sources map[string]Source) []string {
 	var projNames []string
 
@@ -244,13 +245,13 @@ func getProjNames(sources map[string]Source) []string {
 	}
 	return projNames
 }
+
 func getOrgNameByProjName(sources map[string]Source, search string) string {
 
 	for _, source := range sources {
 		if search == source.ProjectName {
-			return source.ProjectName
+			return source.Sources.Cli.Org
 		}
-
 	}
 	return "nil"
 }
@@ -529,8 +530,9 @@ func openBrowser(url string) error {
 }
 
 func prepareOptionsAndPatchesJson(projName string) {
+
 	os.Remove("options.json")
-	//os.Remove("patches.json")
+	os.Remove("patches.json")
 
 	latestPatch, err := getLatestPatchFile(projName)
 
@@ -547,6 +549,7 @@ func prepareOptionsAndPatchesJson(projName string) {
 }
 
 func getLatestPatchFile(projName string) (string, error) {
+
 	dir := fmt.Sprintf("patches/%s", projName)
 	var files []fs.FileInfo
 
@@ -942,9 +945,9 @@ func loadSourcesFromFile(filename string) map[string]Source {
 
 func loadSourcesFromFileOptions(filename string) map[string]PatchOptionsJSON {
 	file, _ := os.ReadFile(filename)
-	fmt.Printf("file: %s\n", filename)
+	// fmt.Printf("file: %s\n", filename)
 	var options map[string]PatchOptionsJSON
-	//fmt.Println("patchOptionJson:", patchOptionJson)
+
 	if err := json.Unmarshal(file, &patchOptionJson); err != nil {
 		fmt.Println("Error unmarshalling PatchOptionsJSON:", err)
 		return nil
@@ -972,6 +975,7 @@ func checkPatchPreRequisites(appName, apk string, w fyne.Window) bool {
 	}
 	return true
 }
+
 func getLatestRVP(patchname string) (string, error) {
 	dir := "patches/" + patchname
 
@@ -1004,11 +1008,12 @@ func getLatestRVP(patchname string) (string, error) {
 	}
 
 	if newest == "" {
-		return "", fmt.Errorf("no .rvp files found in patches/ReVanced")
+		return "", fmt.Errorf("%s", "no .rvp files found in patches/"+patchname)
 	}
 
 	return filepath.Join(dir, newest), nil
 }
+
 func PatchApp(apk, cliSource, source, appName, patchesSource string, logData binding.String, w fyne.Window) error {
 
 	if !checkPatchPreRequisites(appName, apk, w) {
@@ -1139,6 +1144,7 @@ func writeLogs(cmd *exec.Cmd, logData binding.String) error {
 	}()
 	return nil
 }
+
 func addLogText(text string) {
 	currentLog, _ := logData.Get()
 	newLog := currentLog + fmt.Sprintf(" %s\n", text)
@@ -1191,7 +1197,11 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 }
 
 func updatePatches() {
+
 	for _, org := range orgNames {
+		if org == "kitadai31" {
+			continue
+		}
 		dirPath := "patches/" + org + "/"
 
 		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
@@ -1218,7 +1228,7 @@ func updatePatches() {
 				fmt.Println("Downloaded:", dest)
 			}
 		} else {
-			fmt.Println("Latest patch already exists:", dest)
+			fmt.Println(dest, "Up to date")
 		}
 	}
 }
