@@ -4,6 +4,8 @@
 (Inspired by Revancify by decipher)
 ---
 
+## RVX 6/7 and Revanced-Extended not working yet..
+
 ## Requirements
 - **Java 17+**
 - Java-compatible operating system (Windows, macOS, Linux)

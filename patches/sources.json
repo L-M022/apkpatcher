@@ -16,6 +16,23 @@
             }
         }
     },
+     "morphe": {
+        "projectName": "MorpheApp",
+        "sources": {
+            "cli": {
+                "org": "MorpheApp",
+                "repo": "morphe-cli"
+            },
+            "patches": {
+                "org": "MorpheApp",
+                "repo": "morphe-patches"
+            },
+            "integrations": {
+                "org": "morphe",
+                "repo": "morphe-integrations"
+            }
+        }
+    },
     "inotia00": {
         "projectName": "Revanced-Extended",
         "sources": {

@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -149,6 +152,7 @@ type PatchInfo struct {
 	RequiresDependencies bool                 `json:"requiresIntegrations"`
 	Options              []Options            `json:"options"`
 }
+
 type Values struct {
 	Clone    string `json:"Clone"`
 	Default  string `json:"Default"`
@@ -196,6 +200,8 @@ var supportedApp []string
 var dict = make(map[string]string)
 
 var cliSource = "patches/revanced-cli-5.0.1-all.jar"
+var cliSourceMorphe = "patches/morphe-cli-1.9.1-all.jar"
+var cli = ""
 
 // Structs
 var patches []PatchInfo
@@ -203,6 +209,7 @@ var patchOptionJson []PatchOptionsJSON
 
 var orgNames []string
 var projNames []string
+var selectedPatch string
 
 // Downloader
 var apkDownloadVersion string = ""
@@ -290,22 +297,6 @@ func writePatchesOptionsJson() error {
 			}
 		}
 	}
-
-	// arrayPatchNames = []string{"patch-options", "Change package name", "Custom package name", "GmsCore support"}
-	// arrayKeyNames = []string{"YouTube_PackageName", "YouTubePackageName", "packageName", "PackageNameYouTube"}
-	// for z := 0; z < len(patchOptionJson); z++ {
-	// 	for i := 0; i < len(arrayPatchNames); i++ {
-	// 		if patchOptionJson[z].PatchName == arrayPatchNames[i] {
-
-	// 			for x := 0; x < len(arrayKeyNames); x++ {
-	// 				if patchOptionJson[z].Options[0].Key == arrayKeyNames[x] {
-	// 					patchOptionJson[z].Options[0].Value = customPackageName
-	// 				}
-	// 			}
-
-	// 		}
-	// 	}
-	// }
 
 	file, _ := json.Marshal(patchOptionJson)
 	if err := os.WriteFile("patches/gorevancify-patch-options.json", file, 0666); err != nil {
@@ -530,21 +521,45 @@ func openBrowser(url string) error {
 }
 
 func prepareOptionsAndPatchesJson(projName string) {
-
 	os.Remove("options.json")
 	os.Remove("patches.json")
 
 	latestPatch, err := getLatestPatchFile(projName)
-
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println("Error preparing options and patches:", err)
 		return
 	}
 
-	cmd := exec.Command("java", "-jar", cliSource, "options", latestPatch)
+	fmt.Println("projName:", projName)
+
+	cli = cliSource
+	if strings.Contains(projName, "Morphe") {
+		cli = cliSourceMorphe
+	}
+	fmt.Println("cli:", cli)
+	if strings.Contains(projName, "Morphe") {
+		// options
+		cmd := exec.Command(
+			"java",
+			"-jar", cli,
+			"export-patches-json",
+			"-o", "patches.json",
+			"-p", latestPatch,
+		)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+
+		err = cmd.Run()
+		fmt.Println("EXIT:", err)
+	}
+	// options
+
+	cmd := exec.Command("java", "-jar", cli, "options", latestPatch)
 	executePatching(cmd)
 
-	cmd = exec.Command("java", "-jar", cliSource, "patches", latestPatch)
+	// patches
+	cmd = exec.Command("java", "-jar", cli, "patches", latestPatch)
 	executePatching(cmd)
 }
 
@@ -559,7 +574,7 @@ func getLatestPatchFile(projName string) (string, error) {
 	}
 
 	for _, entry := range entries {
-		if entry.Type().IsRegular() && filepath.Ext(entry.Name()) == ".rvp" && filepath.HasPrefix(entry.Name(), "patches-") {
+		if entry.Type().IsRegular() && (filepath.Ext(entry.Name()) == ".rvp" || filepath.Ext(entry.Name()) == ".mpp") && filepath.HasPrefix(entry.Name(), "patches-") {
 			info, err := entry.Info()
 			if err == nil {
 				files = append(files, info)
@@ -708,6 +723,7 @@ func main() {
 		dropdownApp.ClearSelected()
 		supportedApp = []string{}
 		patchName.Text = "Patch selected: " + selected
+		selectedPatch = selected
 
 		// Get patch data and available versions
 		chosen := getOrgNameByProjName(sources, selected)
@@ -726,14 +742,20 @@ func main() {
 
 	var openApkFileButton *widget.Button
 	openApkFileButton = widget.NewButton("Select APK... \n(Apk not selected)", func() {
+
 		fd := dialog.NewFileOpen(func(file fyne.URIReadCloser, err error) {
 			if err != nil || file == nil {
 				return
 			}
+
 			appAPK = file.URI().String()
-			selectedApkName := strings.Split(appAPK, "/")
-			openApkFileButton.SetText("APK Selected \n(" + selectedApkName[len(selectedApkName)-1] + ")")
+
+			selectedApkName := filepath.Base(file.URI().Path())
+			openApkFileButton.SetText("APK Selected \n(" + selectedApkName + ")")
 		}, w)
+
+		fd.SetFilter(storage.NewExtensionFileFilter([]string{".apk"}))
+		fd.Show()
 		fd.Resize(fyne.NewSize(800, 700))
 		fd.Show()
 	})
@@ -768,7 +790,14 @@ func main() {
 		}
 		patch := strings.Split(patchName.Text, " ")[2]
 
-		patchesSource := "patches/" + patch + "/patches-*.rvp"
+		patchesSource := ""
+		fmt.Println("patche selected: " + selectedPatch)
+		if strings.Contains(selectedPatch, "MorpheApp") {
+			patchesSource = "patches/" + patch + "/patches-*.mpp"
+		} else {
+			patchesSource = "patches/" + patch + "/patches-*.rvp"
+		}
+		fmt.Println("\npatchesSource: " + patchesSource)
 
 		if appAPK == "" {
 			dialog.ShowInformation("Error", "No APK selected!", w)
@@ -780,7 +809,8 @@ func main() {
 
 			go func() {
 				//fmt.Println("patchesJson: " + patchesJson)
-				err := PatchApp(appAPK, cliSource, patch, nameEntry.Text, patchesSource, logData, w)
+
+				err := PatchApp(appAPK, cli, patch, nameEntry.Text, patchesSource, logData, w)
 				if err != nil {
 					dialog.ShowError(err, w)
 				} else {
@@ -944,22 +974,34 @@ func loadSourcesFromFile(filename string) map[string]Source {
 }
 
 func loadSourcesFromFileOptions(filename string) map[string]PatchOptionsJSON {
-	file, _ := os.ReadFile(filename)
-	// fmt.Printf("file: %s\n", filename)
-	var options map[string]PatchOptionsJSON
-
-	if err := json.Unmarshal(file, &patchOptionJson); err != nil {
-		fmt.Println("Error unmarshalling PatchOptionsJSON:", err)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Println("missing options.json:", err)
 		return nil
 	}
 
-	return options
+	if len(data) == 0 {
+		fmt.Println("options.json is empty")
+		return nil
+	}
+
+	err = json.Unmarshal(data, &patchOptionJson)
+	if err != nil {
+		fmt.Println("Error unmarshalling PatchOptionsJSON:", err)
+		fmt.Println("Raw content:", string(data))
+		return nil
+	}
+
+	return nil
 }
 
 func executePatching(cmd *exec.Cmd) error {
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	if err := cmd.Run(); err != nil {
-		logError(err)
-		return fmt.Errorf("error running patch command: %v", err)
+		logError(fmt.Errorf("%v | stderr: %s", err, stderr.String()))
+		return err
 	}
 	return nil
 }
@@ -976,7 +1018,7 @@ func checkPatchPreRequisites(appName, apk string, w fyne.Window) bool {
 	return true
 }
 
-func getLatestRVP(patchname string) (string, error) {
+func getLatestPatchesFromGithub(patchname string) (string, error) {
 	dir := "patches/" + patchname
 
 	entries, err := os.ReadDir(dir)
@@ -992,10 +1034,13 @@ func getLatestRVP(patchname string) (string, error) {
 			continue
 		}
 
-		if filepath.Ext(e.Name()) != ".rvp" {
+		// if filepath.Ext(e.Name()) != ".rvp" || filepath.Ext(e.Name()) != ".mpp" {
+		// 	continue
+		// }
+		ext := filepath.Ext(e.Name())
+		if ext != ".rvp" && ext != ".mpp" {
 			continue
 		}
-
 		info, err := e.Info()
 		if err != nil {
 			continue
@@ -1008,7 +1053,7 @@ func getLatestRVP(patchname string) (string, error) {
 	}
 
 	if newest == "" {
-		return "", fmt.Errorf("%s", "no .rvp files found in patches/"+patchname)
+		return "", fmt.Errorf("%s", "no .rvp or .mpp files found in patches/"+patchname)
 	}
 
 	return filepath.Join(dir, newest), nil
@@ -1040,12 +1085,11 @@ func PatchApp(apk, cliSource, source, appName, patchesSource string, logData bin
 	}
 	patchesSourceSlice := strings.Split(patchesSource, "/")
 
-	latestRvp, _ := getLatestRVP(patchesSourceSlice[1])
+	latestRvp, _ := getLatestPatchesFromGithub(patchesSourceSlice[1])
 
 	cmdArgs := []string{
 		"-jar", cliSource, "patch",
 		apk,
-		// "--patches", "patches/" + patchesSourceSlice[1] + "/patches-*.rvp",
 		"--patches", latestRvp,
 		"--out", outputPath,
 		"-O", "patches/gorevancify-patch-options.json",
@@ -1055,8 +1099,20 @@ func PatchApp(apk, cliSource, source, appName, patchesSource string, logData bin
 	cmd := exec.Command("java", cmdArgs...)
 
 	writeLogs(cmd, logData)
-	executePatching(cmd)
+	// executePatching(cmd)
+	err = executePatching(cmd)
+	if err != nil {
+		addLogText("========================================")
+		addLogText("PATCH FAILED")
+		addLogText(err.Error())
+		addLogText("Command: java " + strings.Join(cmdArgs, " "))
+		addLogText("APK: " + apk)
+		addLogText("Patch bundle: " + latestRvp)
+		addLogText("Output: " + outputPath)
 
+		patching = false
+		return fmt.Errorf("patching failed: %w", err)
+	}
 	deleteTempFiles(appName, source)
 
 	// verify if apk patched succesfully
@@ -1107,6 +1163,15 @@ func deleteTempFiles(appName, source string) {
 	} else {
 		addLogText("Folder removed successfully.")
 	}
+	filepath = "patches/morphe-data"
+	addLogText("REMOVING: " + filepath)
+	os.Remove(filepath)
+	if err := os.RemoveAll(filepath); err != nil {
+		addLogText("error removing folder" + filepath + ": " + err.Error())
+	} else {
+		addLogText("Folder removed successfully.")
+	}
+
 }
 
 func writeLogs(cmd *exec.Cmd, logData binding.String) error {
@@ -1169,6 +1234,7 @@ func logError(err error) {
 func getLatestReleaseURL(org, repo string) (string, string, error) {
 
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", org, repo)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", "", err
@@ -1188,12 +1254,12 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 	}
 
 	for _, asset := range data.Assets {
-		if strings.HasSuffix(asset.Name, ".rvp") {
+		if strings.HasSuffix(asset.Name, ".rvp") || strings.HasSuffix(asset.Name, ".mpp") {
 			return asset.BrowserDownloadURL, data.TagName, nil
 		}
 	}
-
-	return "", "", fmt.Errorf("no .rvp asset found in latest release")
+	fmt.Println("latest release url: " + url)
+	return "", "", fmt.Errorf("no .rvp or mpp asset found in latest release")
 }
 
 func updatePatches() {
@@ -1210,15 +1276,26 @@ func updatePatches() {
 				continue
 			}
 		}
+		downloadURL, version, err := "", "", errors.New("")
 
-		downloadURL, version, err := getLatestReleaseURL(org, "revanced-patches")
+		if strings.Contains(org, "Morphe") {
+
+			downloadURL, version, err = getLatestReleaseURL(org, "morphe-patches")
+		} else {
+			downloadURL, version, err = getLatestReleaseURL(org, "revanced-patches")
+		}
 		if err != nil {
 			fmt.Println("Error getting latest release for", org, ":", err)
 			continue
 		}
 
-		dest := filepath.Join(dirPath, "patches-"+version+".rvp")
-
+		dest := ""
+		if strings.Contains(org, "Morphe") {
+			dest = filepath.Join(dirPath, "patches-"+version+".mpp")
+		} else {
+			dest = filepath.Join(dirPath, "patches-"+version+".rvp")
+		}
+		fmt.Println("dest: " + dest)
 		// Descargar si no existe
 		if _, err := os.Stat(dest); os.IsNotExist(err) {
 			fmt.Println("Downloading latest patch:", downloadURL)

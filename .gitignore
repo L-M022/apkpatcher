@@ -6,7 +6,13 @@ apps/patched
 patches/inotia00
 patches/kitadai31
 patches/piko
+.vscode/
+main.exe
+cli/
+patches/MorpheApp
+patches/morphe-data
 patches/ReVanced 
 settings.txt 
 patches/gorevancify-patch-options.json  
 patches/patches-to-use.txt
+*.bak
