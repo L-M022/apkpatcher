@@ -180,7 +180,7 @@ type OptionsPatch struct {
 	Value any    `json:"value"`
 }
 
-var version string = "2.3"
+var version string = "2.4"
 
 // Tables
 var patchTable *widget.Table = loadPatchNames()
@@ -306,7 +306,6 @@ func writePatchesOptionsJson() error {
 }
 
 func setTableCellsLength() {
-	//fmt.Printf("patchesNames len: %v \n", len(patchesNames))
 	for i := 0; i < len(patchesNames); i++ {
 		if nameLength < len(patchesNames[i]) {
 			nameLength = len(patchesNames[i]) * 25
@@ -315,7 +314,6 @@ func setTableCellsLength() {
 			descLength = len(patchesNames[i]) * 120
 		}
 	}
-	//fmt.Printf("nameLen: %v \n descLen: %v", nameLength, descLength)
 }
 
 func prepareDict() {
@@ -385,7 +383,7 @@ func prepareDict() {
 
 func unmarshalJson() {
 	patchJsonFile := "patches.json"
-	//fmt.Printf("patchJsonFile: %v \n", patchJsonFile)
+
 	data, err := os.ReadFile(patchJsonFile)
 	if err != nil {
 		fmt.Printf("error patchJsonFile: %s\n", err)
@@ -533,11 +531,10 @@ func prepareOptionsAndPatchesJson(projName string) {
 	fmt.Println("projName:", projName)
 
 	cli = cliSource
+	fmt.Println("cli:", cli)
+
 	if strings.Contains(projName, "Morphe") {
 		cli = cliSourceMorphe
-	}
-	fmt.Println("cli:", cli)
-	if strings.Contains(projName, "Morphe") {
 		// options
 		cmd := exec.Command(
 			"java",
@@ -552,15 +549,16 @@ func prepareOptionsAndPatchesJson(projName string) {
 
 		err = cmd.Run()
 		fmt.Println("EXIT:", err)
+	} else {
+		// options
+
+		cmd := exec.Command("java", "-jar", cli, "options", latestPatch)
+		executePatching(cmd)
+
+		// patches
+		cmd = exec.Command("java", "-jar", cli, "patches", latestPatch)
+		executePatching(cmd)
 	}
-	// options
-
-	cmd := exec.Command("java", "-jar", cli, "options", latestPatch)
-	executePatching(cmd)
-
-	// patches
-	cmd = exec.Command("java", "-jar", cli, "patches", latestPatch)
-	executePatching(cmd)
 }
 
 func getLatestPatchFile(projName string) (string, error) {
@@ -618,7 +616,6 @@ func getAvailableAppsNamesByPkg() {
 }
 
 func getPackageNamesByAppName(appName string) string {
-
 	for pkg, name := range dict {
 		if name == appName {
 			return pkg
@@ -655,6 +652,7 @@ func main() {
 	sources := loadSourcesFromFile("patches/sources.json")
 	orgNames = getOrgNames(sources)
 	projNames = getProjNames(sources)
+
 	//LoadSettings
 	if readSettings() {
 		updatePatches()
@@ -731,7 +729,6 @@ func main() {
 
 		getAvailableAppsNamesByPkg()
 		dropdownApp.Options = supportedApp
-		//dropdownApp.Refresh()
 
 	})
 	dropdown.PlaceHolder = "Select patch"
@@ -808,8 +805,6 @@ func main() {
 		} else {
 
 			go func() {
-				//fmt.Println("patchesJson: " + patchesJson)
-
 				err := PatchApp(appAPK, cli, patch, nameEntry.Text, patchesSource, logData, w)
 				if err != nil {
 					dialog.ShowError(err, w)
@@ -1034,9 +1029,6 @@ func getLatestPatchesFromGithub(patchname string) (string, error) {
 			continue
 		}
 
-		// if filepath.Ext(e.Name()) != ".rvp" || filepath.Ext(e.Name()) != ".mpp" {
-		// 	continue
-		// }
 		ext := filepath.Ext(e.Name())
 		if ext != ".rvp" && ext != ".mpp" {
 			continue
@@ -1080,7 +1072,7 @@ func PatchApp(apk, cliSource, source, appName, patchesSource string, logData bin
 	//Include patches
 	var patchArgs []string
 	for _, patch := range currentPatchesSelected {
-		//patchArgs = append(patchArgs, "-e", fmt.Sprintf("\"%s\"", patch))
+
 		patchArgs = append(patchArgs, "-e", patch)
 	}
 	patchesSourceSlice := strings.Split(patchesSource, "/")
@@ -1099,7 +1091,7 @@ func PatchApp(apk, cliSource, source, appName, patchesSource string, logData bin
 	cmd := exec.Command("java", cmdArgs...)
 
 	writeLogs(cmd, logData)
-	// executePatching(cmd)
+
 	err = executePatching(cmd)
 	if err != nil {
 		addLogText("========================================")
@@ -1265,7 +1257,7 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 func updatePatches() {
 
 	for _, org := range orgNames {
-		if org == "kitadai31" {
+		if org == "kitadai31" { //Deprecated. Will get deleted or archived in some months
 			continue
 		}
 		dirPath := "patches/" + org + "/"
