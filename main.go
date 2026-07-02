@@ -1233,6 +1233,8 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 	}
 	defer resp.Body.Close()
 
+	fmt.Println(resp.Status)
+
 	var data struct {
 		TagName string `json:"tag_name"`
 		Assets  []struct {
@@ -1257,9 +1259,9 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 func updatePatches() {
 
 	for _, org := range orgNames {
-		if org == "kitadai31" { //Deprecated. Will get deleted or archived in some months
-			continue
-		}
+		// if org == "kitadai31" { //Deprecated. Will get deleted or archived in some months
+		// 	continue
+		// }
 		dirPath := "patches/" + org + "/"
 
 		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
@@ -1271,10 +1273,15 @@ func updatePatches() {
 		downloadURL, version, err := "", "", errors.New("")
 
 		if strings.Contains(org, "Morphe") {
-
 			downloadURL, version, err = getLatestReleaseURL(org, "morphe-patches")
 		} else {
-			downloadURL, version, err = getLatestReleaseURL(org, "revanced-patches")
+			if strings.Contains(org, "kitadai31") {
+				fmt.Println("org: " + org)
+				downloadURL, version, err = getLatestReleaseURL(org, "revanced-patches-android6-7")
+			} else {
+				downloadURL, version, err = getLatestReleaseURL(org, "revanced-patches")
+			}
+
 		}
 		if err != nil {
 			fmt.Println("Error getting latest release for", org, ":", err)

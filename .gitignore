@@ -15,4 +15,4 @@ patches/ReVanced
 settings.txt 
 patches/gorevancify-patch-options.json  
 patches/patches-to-use.txt
-*.bak
+*.bak 
