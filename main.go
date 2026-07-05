@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"encoding/json"
@@ -43,7 +44,6 @@ type verticalCustomLayout struct {
 
 func (d *horizontalCustomLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	var width, height float32
-
 	for i, o := range objects {
 		childSize := o.MinSize()
 		if i < len(d.widths) {
@@ -51,7 +51,6 @@ func (d *horizontalCustomLayout) MinSize(objects []fyne.CanvasObject) fyne.Size 
 		} else {
 			width += childSize.Width
 		}
-
 		if i < len(d.heights) && d.heights[i] > height {
 			height = d.heights[i]
 		} else if childSize.Height > height {
@@ -180,7 +179,7 @@ type OptionsPatch struct {
 	Value any    `json:"value"`
 }
 
-var version string = "2.4"
+var version string = "2.5"
 
 // Tables
 var patchTable *widget.Table = loadPatchNames()
@@ -195,6 +194,7 @@ var nameLength int
 var descLength int
 
 var appToPatch string
+var finalOutput string = "apps/patched/dsa-patched-MorpheApp-2.4.apk"
 var packageName string
 var supportedApp []string
 var dict = make(map[string]string)
@@ -558,6 +558,7 @@ func prepareOptionsAndPatchesJson(projName string) {
 		// patches
 		cmd = exec.Command("java", "-jar", cli, "patches", latestPatch)
 		executePatching(cmd)
+
 	}
 }
 
@@ -767,6 +768,36 @@ func main() {
 
 	})
 
+	var archOptions = []string{
+		"arm64-v8a",
+		"armeabi-v7a",
+		"x86",
+		"x86_64",
+	}
+
+	selectedArch := "arm64-v8a"
+
+	archDropdown := widget.NewSelect(archOptions, func(selected string) {
+		selectedArch = selected
+	})
+
+	archDropdown.SetSelected("arm64-v8a")
+	optimizeButton := widget.NewButton("Optimize APK", func() {
+
+		if finalOutput == "" {
+			dialog.ShowInformation("Error", "No patched APK found.", w)
+			return
+		}
+
+		err := RemoveUnusedLibs(finalOutput, []string{selectedArch})
+		if err != nil {
+			dialog.ShowError(err, w)
+			return
+		}
+
+		dialog.ShowInformation("Success", "APK optimized successfully.", w)
+	})
+
 	apkPartLabel := widget.NewLabel("\nOR...")
 	apkPartLabel.Alignment = fyne.TextAlignCenter
 	apkPartLabel.TextStyle = fyne.TextStyle{Bold: true}
@@ -812,13 +843,19 @@ func main() {
 					dialog.ShowInformation("Success", "APK patched successfully! \n"+fmt.Sprintf("apps/patched/%s-patched-%s.apk", nameEntry.Text, patch), w)
 				}
 			}()
+			finalOutput = fmt.Sprintf("apps/patched/%s-patched-%s-%s.apk", nameEntry.Text, patch, version)
 		}
 	})
+	optimizePart := container.New(&horizontalCustomLayout{
+		widths:  []float32{100, 400, 150},
+		heights: []float32{50, 50, 50},
+		tabbing: []float32{25, 10, 0},
+	}, widget.NewLabel("Strip libs\nexcept selected"), archDropdown, optimizeButton)
 
 	patchAndConsole := container.New(&verticalCustomLayout{
-		widths:  []float32{800, 50, 800},
-		heights: []float32{100, 50, 300},
-	}, patchButton, widget.NewLabel("Console Log"), consoleLog)
+		widths:  []float32{800, 800, 800, 800},
+		heights: []float32{100, 80, 40, 300},
+	}, patchButton, optimizePart, widget.NewLabel("Console Log"), consoleLog)
 
 	nameEntry.Resize(fyne.NewSize(100, 50))
 
@@ -1255,7 +1292,118 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 	fmt.Println("latest release url: " + url)
 	return "", "", fmt.Errorf("no .rvp or mpp asset found in latest release")
 }
+func RemoveUnusedLibs(apk string, keep []string) error {
 
+	keepMap := make(map[string]struct{})
+	for _, abi := range keep {
+		keepMap[abi] = struct{}{}
+	}
+
+	r, err := zip.OpenReader(apk)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	tmp := apk + ".tmp"
+
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+
+	zw := zip.NewWriter(out)
+
+	for _, file := range r.File {
+
+		if strings.HasPrefix(file.Name, "lib/") {
+
+			parts := strings.Split(file.Name, "/")
+
+			if len(parts) >= 3 {
+
+				abi := parts[1]
+
+				if _, ok := keepMap[abi]; !ok {
+					addLogText("Removing " + file.Name)
+					continue
+				}
+			}
+		}
+
+		hdr := file.FileHeader
+
+		writer, err := zw.CreateHeader(&hdr)
+		if err != nil {
+			zw.Close()
+			out.Close()
+			return err
+		}
+
+		rc, err := file.Open()
+		if err != nil {
+			zw.Close()
+			out.Close()
+			return err
+		}
+
+		_, err = io.Copy(writer, rc)
+		rc.Close()
+
+		if err != nil {
+			zw.Close()
+			out.Close()
+			return err
+		}
+	}
+
+	zw.Close()
+	out.Close()
+
+	if err := r.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Remove(apk); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp, apk)
+}
+func DetectABIs(apk string) ([]string, error) {
+
+	r, err := zip.OpenReader(apk)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	found := make(map[string]struct{})
+
+	for _, f := range r.File {
+
+		if !strings.HasPrefix(f.Name, "lib/") {
+			continue
+		}
+
+		parts := strings.Split(f.Name, "/")
+		if len(parts) < 3 {
+			continue
+		}
+
+		found[parts[1]] = struct{}{}
+	}
+
+	var abis []string
+
+	for abi := range found {
+		abis = append(abis, abi)
+	}
+
+	sort.Strings(abis)
+
+	return abis, nil
+}
 func updatePatches() {
 
 	for _, org := range orgNames {
