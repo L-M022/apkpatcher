@@ -19,6 +19,8 @@ import (
 	"os/exec"
 	"time"
 
+	"main/tools"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
@@ -178,8 +180,13 @@ type OptionsPatch struct {
 	Key   string `json:"key"`
 	Value any    `json:"value"`
 }
+type ManifestOptions struct {
+	AddLeanback bool
+	AddBanner   bool
+	BannerFile  string
+}
 
-var version string = "2.5"
+var version string = "2.6"
 
 // Tables
 var patchTable *widget.Table = loadPatchNames()
@@ -210,6 +217,10 @@ var patchOptionJson []PatchOptionsJSON
 var orgNames []string
 var projNames []string
 var selectedPatch string
+
+// TV Compat
+var appCompatTV bool
+var tvBannerPath string = ""
 
 // Downloader
 var apkDownloadVersion string = ""
@@ -850,12 +861,76 @@ func main() {
 		widths:  []float32{100, 400, 150},
 		heights: []float32{50, 50, 50},
 		tabbing: []float32{25, 10, 0},
-	}, widget.NewLabel("Strip libs\nexcept selected"), archDropdown, optimizeButton)
+	}, widget.NewLabel("(After Patching)\nStrip libs\nexcept selected"), archDropdown, optimizeButton)
+
+	tvCompatLabel := widget.NewLabel("TV compatibility")
+
+	appCompatCheck := widget.NewCheck("Enable", func(checked bool) {
+		appCompatTV = checked
+	})
+
+	bannerLabel := widget.NewLabel("No banner selected")
+
+	bannerButton := widget.NewButton(
+		"Select TV Banner (320x180 PNG/WEBP)",
+		func() {
+
+			fd := dialog.NewFileOpen(func(file fyne.URIReadCloser, err error) {
+
+				if err != nil || file == nil {
+					return
+				}
+
+				path := file.URI().Path()
+
+				ext := strings.ToLower(filepath.Ext(path))
+
+				if ext != ".png" && ext != ".webp" {
+					dialog.ShowError(
+						fmt.Errorf("only PNG and WEBP files are supported"),
+						w,
+					)
+					return
+				}
+
+				tvBannerPath = path
+
+				bannerLabel.SetText(
+					filepath.Base(path),
+				)
+
+			}, w)
+
+			size := w.Canvas().Size()
+
+			fd.Resize(
+				size,
+			)
+
+			fd.Show()
+
+			fd.SetFilter(
+				storage.NewExtensionFileFilter(
+					[]string{
+						".png",
+						".webp",
+					},
+				),
+			)
+
+			fd.Show()
+		},
+	)
+	tvCompatContainer := container.New(&horizontalCustomLayout{
+		widths:  []float32{150, 100, 350, 150},
+		heights: []float32{40, 40, 40, 40},
+		tabbing: []float32{10, 10, 10, 0},
+	}, tvCompatLabel, appCompatCheck, bannerButton, bannerLabel)
 
 	patchAndConsole := container.New(&verticalCustomLayout{
-		widths:  []float32{800, 800, 800, 800},
-		heights: []float32{100, 80, 40, 300},
-	}, patchButton, optimizePart, widget.NewLabel("Console Log"), consoleLog)
+		widths:  []float32{800, 800, 800, 800, 800},
+		heights: []float32{60, 100, 80, 40, 300},
+	}, tvCompatContainer, patchButton, optimizePart, widget.NewLabel("Console Log"), consoleLog)
 
 	nameEntry.Resize(fyne.NewSize(100, 50))
 
@@ -1142,10 +1217,40 @@ func PatchApp(apk, cliSource, source, appName, patchesSource string, logData bin
 		patching = false
 		return fmt.Errorf("patching failed: %w", err)
 	}
+
+	if appCompatTV {
+
+		addLogText("Patching for TV")
+		err = tools.ModifyManifest(
+			outputPath,
+			tools.ManifestOptions{
+				AddLeanback: true,
+				AddBanner:   true,
+				BannerPath:  tvBannerPath,
+				BannerName:  "tv_banner",
+			},
+		)
+		if err != nil {
+			addLogText("Google TV compatibility failed")
+			addLogText(err.Error())
+			logError(err)
+			addLogText("Cleaning apktool framework...")
+
+			err = tools.CleanApktoolFramework()
+			patching = false
+			return err
+		}
+		addLogText("Google TV compatibility applied")
+
+	}
+
+	//Delete temp
 	deleteTempFiles(appName, source)
 
 	// verify if apk patched succesfully
-	if _, err := os.Stat(fmt.Sprintf("apps/patched/%s-patched-%s-%v.apk", appName, source, version)); os.IsNotExist(err) {
+	// if _, err := os.Stat(fmt.Sprintf("apps/patched/%s-patched-%s-%v.apk", appName, source, version)); os.IsNotExist(err) {
+
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		patching = false
 		return fmt.Errorf("patching failed")
 	} else {
@@ -1292,6 +1397,7 @@ func getLatestReleaseURL(org, repo string) (string, string, error) {
 	fmt.Println("latest release url: " + url)
 	return "", "", fmt.Errorf("no .rvp or mpp asset found in latest release")
 }
+
 func RemoveUnusedLibs(apk string, keep []string) error {
 
 	keepMap := make(map[string]struct{})
@@ -1370,6 +1476,7 @@ func RemoveUnusedLibs(apk string, keep []string) error {
 
 	return os.Rename(tmp, apk)
 }
+
 func DetectABIs(apk string) ([]string, error) {
 
 	r, err := zip.OpenReader(apk)
@@ -1404,6 +1511,7 @@ func DetectABIs(apk string) ([]string, error) {
 
 	return abis, nil
 }
+
 func updatePatches() {
 
 	for _, org := range orgNames {
