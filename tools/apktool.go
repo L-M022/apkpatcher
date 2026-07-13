@@ -84,7 +84,7 @@ func GetBaseDir() string {
 func CheckAPKTools() error {
 
 	required := []string{
-		ToolPath("apktool.jar"),
+		ToolPath("apktool_3.0.2.jar"),
 		ToolPath("apksigner.jar"),
 		ToolPath("zipalign.exe"),
 		ToolPath("ApkToolkit_Key.pk8"),

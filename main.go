@@ -791,7 +791,7 @@ func main() {
 	archDropdown := widget.NewSelect(archOptions, func(selected string) {
 		selectedArch = selected
 	})
-
+	bannerLabel := widget.NewLabel("No banner selected")
 	archDropdown.SetSelected("arm64-v8a")
 	optimizeButton := widget.NewButton("Optimize APK", func() {
 
@@ -826,6 +826,12 @@ func main() {
 		if patchName.Text == "" {
 			dialog.ShowCustom("error", "close", widget.NewLabel("Patch not selected"), w)
 			return
+		}
+		if appCompatTV {
+			if bannerLabel.Text == "No banner selected" {
+				dialog.ShowCustom("error", "close", widget.NewLabel("Banner not selected"), w)
+				return
+			}
 		}
 		patch := strings.Split(patchName.Text, " ")[2]
 
@@ -868,8 +874,6 @@ func main() {
 	appCompatCheck := widget.NewCheck("Enable", func(checked bool) {
 		appCompatTV = checked
 	})
-
-	bannerLabel := widget.NewLabel("No banner selected")
 
 	bannerButton := widget.NewButton(
 		"Select TV Banner (320x180 PNG/WEBP)",
