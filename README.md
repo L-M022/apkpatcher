@@ -1,6 +1,6 @@
 # Apk Patcher
 
-**Apk Patcher** allows you to apply **Revanced**, **Revanced-Extended** or **Revanced(Android 6-7)** patches to any compatible APK.
+**Apk Patcher** allows you to apply **Revanced** or **Morphe** patches to any compatible APK.
 (Inspired by Revancify by decipher)
 ---
 
