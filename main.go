@@ -186,7 +186,7 @@ type ManifestOptions struct {
 	BannerFile  string
 }
 
-var version string = "2.6"
+var version string = "2.7"
 
 // Tables
 var patchTable *widget.Table = loadPatchNames()
@@ -806,7 +806,7 @@ func main() {
 			return
 		}
 
-		dialog.ShowInformation("Success", "APK optimized successfully.", w)
+		dialog.ShowInformation("Success", "APK optimized successfully\n Remember to sign it again", w)
 	})
 
 	apkPartLabel := widget.NewLabel("\nOR...")
