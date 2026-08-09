@@ -207,7 +207,7 @@ var supportedApp []string
 var dict = make(map[string]string)
 
 var cliSource = "patches/revanced-cli-5.0.1-all.jar"
-var cliSourceMorphe = "patches/morphe-cli-1.9.1-all.jar"
+var cliSourceMorphe = "patches/morphe-desktop-1.12.0-all.jar"
 var cli = ""
 
 // Structs
@@ -542,7 +542,6 @@ func prepareOptionsAndPatchesJson(projName string) {
 	fmt.Println("projName:", projName)
 
 	cli = cliSource
-	fmt.Println("cli:", cli)
 
 	if strings.Contains(projName, "Morphe") {
 		cli = cliSourceMorphe
@@ -571,6 +570,7 @@ func prepareOptionsAndPatchesJson(projName string) {
 		executePatching(cmd)
 
 	}
+	fmt.Println("cli location:", cli)
 }
 
 func getLatestPatchFile(projName string) (string, error) {
